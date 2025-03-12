@@ -2,7 +2,6 @@ from __future__ import annotations
 from dotenv import load_dotenv
 from typing import List
 import asyncio
-import logfire
 import httpx
 import os
 
@@ -13,7 +12,6 @@ from github_agent import github_agent, GitHubDeps
 load_dotenv()
 
 # Configure logfire to suppress warnings
-logfire.configure(send_to_logfire='never')
 
 class CLI:
     def __init__(self):

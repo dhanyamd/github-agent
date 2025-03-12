@@ -12,22 +12,20 @@ import time
 import re
 import json
 import httpx
-import logfire
 from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.models.openai import OpenAIModel
-from devtools import debug
+from datetime import datetime, timezone
 
 load_dotenv()
 
 llm = os.getenv('LLM_MODEL', 'deepseek/deepseek-chat')
 model = OpenAIModel(
     llm,
-    provider='deepseek',
-    base_url = 'https://openrouter.ai/api/v1',
+  #  provider='deepseek/deepseek-chat',
+   base_url = 'https://openrouter.ai/api/v1',
     api_key=os.getenv('OPEN_ROUTER_API_KEY')
-) if os.getenv('OPEN_ROUTER_API_KEY', None) else OpenAIModel(llm)
+) 
 
-logfire.configure(send_to_logfire='if-token-present')
 
 @dataclass
 class GitHubDeps:
@@ -72,10 +70,11 @@ async def get_repo_info(ctx: RunContext[GitHubDeps], github_url: str) -> str:
      headers = {'Authorization': f'token {ctx.deps.github_token}'}
 
      response = await ctx.deps.client.get(
-         f'https://api.github.com/repos/{owner}/{repo}'
+         f'https://api.github.com/repos/{owner}/{repo}',
+         headers=headers
      )
 
-     if response.status.code != 200: 
+     if response.status_code != 200: 
         return f"Failed to get repository info: {response.text}" 
      data = response.json()
      size_mb = data['size'] / 1024 
@@ -125,7 +124,7 @@ async def get_repo_structure(ctx: RunContext[GitHubDeps], github_url: str) -> st
 
 @github_agent.tool 
 async def get_file_content(ctx: RunContext[GitHubDeps], github_url: str, file_path: str) -> str: 
-  """Get the content of a specific file from the GitHub repository.
+    """Get the content of a specific file from the GitHub repository.
 
     Args:
         ctx: The context.
@@ -135,19 +134,19 @@ async def get_file_content(ctx: RunContext[GitHubDeps], github_url: str, file_pa
     Returns:
         str: File content as a string.
     """
-  match = re.search(r'github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$', github_url)
-  if not match:
+    match = re.search(r'github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$', github_url)
+    if not match:
         return "Invalid GitHub URL format"
     
-  owner, repo = match.groups()
-  headers = {'Authorization': f'token {ctx.deps.github_token}'} if ctx.deps.github_token else {}
+    owner, repo = match.groups()
+    headers = {'Authorization': f'token {ctx.deps.github_token}'} if ctx.deps.github_token else {}
 
-  response = await ctx.deps.client.get(
+    response = await ctx.deps.client.get(
         f'https://raw.githubusercontent.com/{owner}/{repo}/main/{file_path}',
         headers=headers
     )
     
-  if response.status_code != 200:
+    if response.status_code != 200:
         # Try with master branch if main fails
         response = await ctx.deps.client.get(
             f'https://raw.githubusercontent.com/{owner}/{repo}/master/{file_path}',
@@ -156,4 +155,8 @@ async def get_file_content(ctx: RunContext[GitHubDeps], github_url: str, file_pa
         if response.status_code != 200:
             return f"Failed to get file content: {response.text}"
     
-  return response.text
+    # Remove the timestamp conversion since response.created is None
+    # Log the response for debugging
+    print("API Response:", response)  
+    
+    return response.text
